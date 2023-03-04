@@ -28,9 +28,9 @@ from core.ofa import OFATokenizer
 from core.ofa.modeling_ofa import OFAModelForVQA
 from core.optimizer import get_optimizer
 from core.ofa.generate import sequence_generator
-from core.datasets.file_dataset import FileDataset
+# from core.datasets.file_dataset import FileDataset
 
-from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator
+from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset
 from transformers import (
     TrainingArguments,
     set_seed,
@@ -127,17 +127,25 @@ class VQATrainer(nn.Module):
 		self.register_buffer('steps', torch.Tensor([0]))
 		self.vqa_model = vqa_model
 
-		tsv_dataset = FileDataset(args.data_folder, [0,5,2,3,4])
-		self.ds = VqaGenDataset(
-			split = "train",
-			dataset = tsv_dataset,
-			max_src_length=128,
-			max_object_length=30,
-			max_tgt_length=30,
-			patch_image_size=224,
-			add_object=False,
-			imagenet_default_mean_and_std=False,
-			prompt_type="none"
+		# tsv_dataset = FileDataset(args.data_folder, [0,5,2,3,4])
+		# self.ds = VqaGenDataset(
+		# 	split = "train",
+		# 	dataset = tsv_dataset,
+		# 	max_src_length=128,
+		# 	max_object_length=30,
+		# 	max_tgt_length=30,
+		# 	patch_image_size=224,
+		# 	add_object=False,
+		# 	imagenet_default_mean_and_std=False,
+		# 	prompt_type="none"
+		# )
+
+		
+		self.ann_file = '/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/vqa_train_ocr.json'
+		self.vqa_root = '/srv/datasets/coco/'
+		self.ds = VqaDataset(
+			ann_file=self.ann_file,
+			vqa_root=self.vqa_root,
 		)
 
 		self.num_train_steps = training_args.num_train_epochs * len(self.ds)
