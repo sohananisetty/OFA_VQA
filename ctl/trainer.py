@@ -13,37 +13,40 @@ from beartype.door import is_bearable
 from beartype.vale import Is
 
 import torch
-import torchaudio
+# import torchaudio
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
-from torchvision import transforms
+# from torchvision import transforms
 
-from einops import rearrange
+# from einops import rearrange
 
-from ema_pytorch import EMA
+# from ema_pytorch import EMA
 
 from PIL import Image
 from torchvision import transforms
-from core.ofa import OFATokenizer
-from core.ofa.modeling_ofa import OFAModelForVQA
-from core.optimizer import get_optimizer
-from core.ofa.generate import sequence_generator
-# from core.datasets.file_dataset import FileDataset
 
-from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset
-from transformers import (
-    TrainingArguments,
-    set_seed,
-    Trainer,
-)
 from transformers import AdamW, get_scheduler
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
 from accelerate import DistributedType
 import wandb
-
 import transformers
+
+
 from core.ofa.label_smoothed_cross_entropy import AdjustLabelSmoothedCrossEntropyCriterion
+from core.ofa import OFATokenizer
+from core.ofa.modeling_ofa import OFAModelForVQA
+from core.optimizer import get_optimizer
+
+from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset
+
+# from core.ofa.generate import sequence_generator
+# from core.datasets.file_dataset import FileDataset
+# from transformers import (
+# 	TrainingArguments,
+# 	set_seed,
+# 	Trainer,
+# )
 
 
 # helpers
@@ -101,6 +104,7 @@ class VQATrainer(nn.Module):
 		self,
 		vqa_model: OFAModelForVQA,
 		tokenizer:OFATokenizer,
+		data_folder,
 		args,
 		training_args,
 		wandb_every = 100,
@@ -126,6 +130,15 @@ class VQATrainer(nn.Module):
 
 		self.register_buffer('steps', torch.Tensor([0]))
 		self.vqa_model = vqa_model
+		if args.freeze_encoder:
+			for name, param in self.vqa_model.encoder.named_parameters():
+				if 'embed_tokens' in name and not args.freeze_word_embed:
+					param.requires_grad = True
+				else:
+					param.requires_grad = False
+
+		total = sum(p.numel() for p in self.vqa_model.parameters() if p.requires_grad)
+		print("Total training params: %.2fM" % (total / 1e6))
 
 		# tsv_dataset = FileDataset(args.data_folder, [0,5,2,3,4])
 		# self.ds = VqaGenDataset(
@@ -141,18 +154,27 @@ class VQATrainer(nn.Module):
 		# )
 
 		
-		self.ann_file = '/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/vqa_train_ocr.json'
+		train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
+		val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
 		self.vqa_root = '/srv/datasets/coco/'
+
 		self.ds = VqaDataset(
-			ann_file=self.ann_file,
+			ann_file=train_file,
 			vqa_root=self.vqa_root,
 		)
+		self.valid_ds = VqaDataset(
+			ann_file=val_file,
+			vqa_root=self.vqa_root,
+		)
+		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
+
 
 		self.num_train_steps = training_args.num_train_epochs * len(self.ds)
 		self.batch_size = training_args.per_device_train_batch_size
 		self.grad_accum_every = training_args.gradient_accumulation_steps
 
-		self.loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion()
+		self.loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion(label_smoothing = args.label_smoothing)
+		
 		self.optim = get_optimizer(self.vqa_model.parameters(), lr = training_args.learning_rate, wd = training_args.weight_decay)
 		self.lr_scheduler = get_scheduler(
 			name = training_args.lr_scheduler_type,
@@ -165,18 +187,17 @@ class VQATrainer(nn.Module):
 
 
 		
-		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
 
 		# split for validation
 
-		if valid_frac > 0:
-			train_size = int((1 - valid_frac) * len(self.ds))
-			valid_size = len(self.ds) - train_size
-			self.ds, self.valid_ds = random_split(self.ds, [train_size, valid_size], generator = torch.Generator().manual_seed(42))
-			self.print(f'training with dataset of {len(self.ds)} samples and validating with randomly splitted {len(self.valid_ds)} samples')
-		else:
-			self.valid_ds = self.ds
-			self.print(f'training with shared training and valid dataset of {len(self.ds)} samples')
+		# if valid_frac > 0:
+		# 	train_size = int((1 - valid_frac) * len(self.ds))
+		# 	valid_size = len(self.ds) - train_size
+		# 	self.ds, self.valid_ds = random_split(self.ds, [train_size, valid_size], generator = torch.Generator().manual_seed(42))
+		# 	self.print(f'training with dataset of {len(self.ds)} samples and validating with randomly splitted {len(self.valid_ds)} samples')
+		# else:
+		# 	self.valid_ds = self.ds
+		self.print(f'training with shared training and valid dataset of {len(self.ds)} samples')
 
 		# dataloader
 
@@ -214,22 +235,6 @@ class VQATrainer(nn.Module):
 		hps = {"num_train_steps": self.num_train_steps, "max_seq_length": args.max_seq_length, "learning_rate": training_args.learning_rate}
 		self.accelerator.init_trackers("ofa_vqa", config=hps)        
 
-
-		# trainer = Trainer(
-		# 	model=vqa_model,
-		# 	args=training_args,
-		# 	train_dataset=self.ds,
-		# 	eval_dataset = self.valid_ds,
-		# 	data_collator=data_collator,
-		# 	tokenizer=tokenizer
-		# )
-
-		# train_result = trainer.train()
-		# metrics = train_result.metrics
-		# trainer.log_metrics("train", metrics)
-		# trainer.save_metrics("train", metrics)
-		# trainer.save_state()
-		# trainer.save_model(os.path.join(training_args.output_dir, 'checkpoint-final'))
 			
 	@property
 	def device(self):
@@ -338,6 +343,7 @@ class VQATrainer(nn.Module):
 			self.accelerator.log({
 				"total_loss": logs['loss'],
 				"nll_loss": logs['nll_loss'],
+				"accuracy" : logs['acc']
 			}, step=steps)
 
 		# log

@@ -42,24 +42,25 @@ class VQACollator():
 
     def __call__(self, samples):
 
-        src = [samples["source"] for s in samples]
+        src = [sample["source"] for sample in samples]
         src_tokens = self.tokenizer( src, return_tensors="pt", max_length=self.max_seq_length, truncation=True, padding=True).input_ids
-        src_lengths = torch.LongTensor([s.ne(self.pad).long().sum() for s in src])
+        src_lengths = torch.LongTensor([s.ne(self.pad).long().sum() for s in src_tokens])
         
         patch_images = torch.stack([sample['patch_image'] for sample in samples], dim=0)
         patch_masks = torch.cat([sample['patch_mask'] for sample in samples])
 
-        tgt = [samples["target"] for s in samples]
-        tgt_tokens = self.tokenizer( tgt, return_tensors="pt", max_length=self.max_seq_length, truncation=True, padding=True)
-        attention_mask = tgt_tokens.attention_mask
-        tgt_tokens = tgt_tokens.input_ids
-        tgt_lengths = torch.LongTensor([s.ne(self.pad).long().sum() for s in tgt])
+        tgt = [sample["target"] for sample in samples]
+        tgt_tokenised = self.tokenizer( tgt, return_tensors="pt", max_length=self.max_seq_length, truncation=True, padding=True)
+        attention_mask = tgt_tokenised.attention_mask
+        tgt_tokens = tgt_tokenised.input_ids
+        tgt_lengths = torch.LongTensor([s.ne(self.pad).long().sum() for s in tgt_tokens])
         # ntokens = tgt_lengths.sum().item()
-
         if samples[0]["prompt_type"] == 'none':
-            prev_output_tokens = tgt_tokens[:,:-1]
-            target_item = tgt_tokens[:,1:]
-            decoder_input_ids = torch.repeat_interleave(self.bos , target_item.shape[0]).reshape(1,-1)
+            target_item = tgt_tokens[:,1:].clone()
+            prev_output_tokens = tgt_tokens[:,:-1].clone()
+            prev_output_tokens[prev_output_tokens==self.eos] = self.pad
+            attention_mask = attention_mask[:,1:]
+            decoder_prompt_ids = torch.repeat_interleave(self.bos , target_item.shape[0]).reshape(-1,1)
 
 
 
@@ -69,13 +70,10 @@ class VQACollator():
 
         batch = {
             "input_ids": src_tokens,
-            "src_lengths": src_lengths,
             "patch_images": patch_images,
             "patch_masks": patch_masks,
-            # "prev_output_tokens": prev_output_tokens,
-            "decoder_input_ids": decoder_input_ids,
-            "target": tgt_tokens,
-            # "prefix_tokens": prefix_tokens,
+            "decoder_input_ids": prev_output_tokens,
+            "target": target_item,
             'return_loss': False,
             "attention_mask" : attention_mask,
 
@@ -251,7 +249,7 @@ class VqaDataset(Dataset):
 
 
         question = ann['question']
-        question = self.pre_question(question, self.max_src_length)
+        question = self.pre_question(question, self.max_ques_words)
         question = question + '?' if not question.endswith('?') else question
         question = (' {}'.format(question))
 

@@ -1452,6 +1452,7 @@ class OFADecoder(OFAPreTrainedModel):
             pos_k = self.self_pos_k_linear(tgt_pos_embed).view(
                 batch_size, src_len, self.num_attention_heads, -1
             ).transpose(1, 2)
+
         abs_pos_bias = torch.matmul(pos_q, pos_k.transpose(2, 3))
 
         return abs_pos_bias

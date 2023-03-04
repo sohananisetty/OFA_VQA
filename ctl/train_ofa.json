@@ -21,12 +21,11 @@
     "weight_decay": 0,
     "max_grad_norm": 1.0,
 
-    "max_seq_length": 128,
+    "max_seq_length": 80,
     "remove_unused_columns": false,
     "pretrained": "",
     "data_folder":"",
     "freeze_encoder": true,
-    "freeze_word_embed": true
-
-
+    "freeze_word_embed": true,
+    "label_smoothing":0.1
 }

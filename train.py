@@ -37,7 +37,8 @@ def main(args_base ,args , training_args):
         args,
         training_args,
         wandb_every = args_base.wandb_every,
-        
+        data_folder=args_base.data_folder
+
         
 
     
@@ -49,7 +50,7 @@ def main(args_base ,args , training_args):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_folder', default="/srv/share4/sanisetty3/FMA/fma_large/" , help="folder with train and test data")
+    parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
     parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA_VQA/OFA-tiny')
     parser.add_argument('--resume', default=True, type = bool)
     parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints")
@@ -59,7 +60,9 @@ if __name__ == '__main__':
 
     parser.add_argument('--per_device_train_batch_size', default=12, type=int,)
     parser.add_argument('--per_device_eval_batch_size', default=12, type=int,)
-    parser.add_argument('--gradient_accumulation_steps', default=12, type=int,)
+    parser.add_argument('--gradient_accumulation_steps', default=4, type=int,)
+    parser.add_argument('--label_smoothing', default=0.1, type=float,)
+
 
     parser.add_argument("--num_train_epochs",  default=100,type=int)
     parser.add_argument("--save_steps",  default=500,type=int)
@@ -68,7 +71,7 @@ if __name__ == '__main__':
     parser.add_argument("--train_args_file", type=str, default='train_args/train_ofa.json', help="")
     
     parser.add_argument('--freeze_encoder', default=True, type = bool)
-    parser.add_argument('--max_seq_length', default=128, type=int,)
+    parser.add_argument('--max_seq_length', default=80, type=int,)
     parser.add_argument('--max_object_length', default=30, type=int,)
     parser.add_argument('--max_tgt_length', default=30, type=int,)
     parser.add_argument('--patch_image_size', default=224, type=int,)

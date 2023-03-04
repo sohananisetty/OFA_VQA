@@ -102,7 +102,7 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
     def __init__(
         self,
         sentence_avg = False,
-        label_smoothing = 0.0,
+        label_smoothing = 0.1,
         ignore_prefix_size=0,
         ignore_eos=False,
         report_accuracy=True,
@@ -130,7 +130,7 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
 
         self.eos = eos
         self.bos = bos
-        self.pad = pad
+        self.padding_idx = pad
 
         self.constraint_start = None
         self.constraint_end = None
@@ -148,9 +148,18 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
         3) logging outputs to display while training
         """
 
-        net_output = model(
-            **sample
-            )
+        # net_output = model(
+        #     input_ids = sample["input_ids"],
+        #     patch_images = sample["patch_images"],
+        #     patch_masks = sample["patch_masks"],
+        #     decoder_input_ids = sample["decoder_input_ids"],
+        #     # target = sample["target"],
+        #     # return_loss = sample["return_loss"],
+        #     )
+
+        net_output = model(**sample)
+        
+        
         loss, nll_loss, ntokens = self.compute_loss(model, net_output, sample, update_num, reduce=reduce)
         sample_size = (
             sample["target"].size(0) if self.sentence_avg else ntokens
@@ -164,48 +173,52 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
         }
         if self.report_accuracy:
             n_correct, total = self.compute_accuracy(model, net_output, sample)
-            logging_output["n_correct"] = fitem(n_correct.data)
-            logging_output["total"] = fitem(total.data)
+            n_correct = fitem(n_correct.data)
+            total = fitem(total.data)
+            logging_output["acc"] = n_correct/total
+
         return loss, sample_size, logging_output
         
 
     def get_lprobs_and_target(self, model, net_output, sample):
         conf = sample['conf'][:, None, None] if 'conf' in sample and sample['conf'] is not None else 1
         constraint_masks = None
-        if "constraint_masks" in sample and sample["constraint_masks"] is not None:
-            constraint_masks = sample["constraint_masks"]
-            net_output[0].masked_fill_(~constraint_masks, -math.inf)
-        if self.constraint_start is not None and self.constraint_end is not None:
-            net_output[0][:, :, 4:self.constraint_start] = -math.inf
-            net_output[0][:, :, self.constraint_end:] = -math.inf
+        # if "constraint_masks" in sample and sample["constraint_masks"] is not None:
+        #     constraint_masks = sample["constraint_masks"]
+        #     net_output[0].masked_fill_(~constraint_masks, -math.inf)
+        # if self.constraint_start is not None and self.constraint_end is not None:
+        #     net_output[0][:, :, 4:self.constraint_start] = -math.inf
+        #     net_output[0][:, :, self.constraint_end:] = -math.inf
 
 
         lprobs = model.get_normalized_probs(net_output, log_probs=True) * conf
         target = model.get_targets(sample)
 
 
-        if self.ignore_prefix_size > 0:
-            lprobs = lprobs[:, self.ignore_prefix_size :, :].contiguous()
-            target = target[:, self.ignore_prefix_size :].contiguous()
-            if constraint_masks is not None:
-                constraint_masks = constraint_masks[:, self.ignore_prefix_size :, :].contiguous()
-        if self.ignore_eos:
-            bsz, seq_len, embed_dim = lprobs.size()
-            eos_indices = target.eq(self.eos)
-            lprobs = lprobs[~eos_indices].reshape(bsz, seq_len-1, embed_dim)
-            target = target[~eos_indices].reshape(bsz, seq_len-1)
-            if constraint_masks is not None:
-                constraint_masks = constraint_masks[~eos_indices].reshape(bsz, seq_len-1, embed_dim)
-        if constraint_masks is not None:
-            constraint_masks = constraint_masks.view(-1, constraint_masks.size(-1))
+        # if self.ignore_prefix_size > 0:
+        #     lprobs = lprobs[:, self.ignore_prefix_size :, :].contiguous()
+        #     target = target[:, self.ignore_prefix_size :].contiguous()
+        #     if constraint_masks is not None:
+        #         constraint_masks = constraint_masks[:, self.ignore_prefix_size :, :].contiguous()
+        # if self.ignore_eos:
+        #     bsz, seq_len, embed_dim = lprobs.size()
+        #     eos_indices = target.eq(self.eos)
+        #     lprobs = lprobs[~eos_indices].reshape(bsz, seq_len-1, embed_dim)
+        #     target = target[~eos_indices].reshape(bsz, seq_len-1)
+        #     if constraint_masks is not None:
+        #         constraint_masks = constraint_masks[~eos_indices].reshape(bsz, seq_len-1, embed_dim)
+        # if constraint_masks is not None:
+        #     constraint_masks = constraint_masks.view(-1, constraint_masks.size(-1))
         return lprobs.view(-1, lprobs.size(-1)), target.view(-1), constraint_masks
 
     def compute_loss(self, model, net_output, sample, update_num, reduce=True):
         lprobs, target, constraint_masks = self.get_lprobs_and_target(model, net_output, sample)
         if constraint_masks is not None:
             constraint_masks = constraint_masks[target != self.padding_idx]
+        
         lprobs = lprobs[target != self.padding_idx]
         target = target[target != self.padding_idx]
+        
         loss, nll_loss, ntokens = label_smoothed_nll_loss(
             lprobs,
             target,
@@ -223,7 +236,7 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
         return loss, nll_loss, ntokens
 
     def compute_accuracy(self, model, net_output, sample):
-        lprobs, target = self.get_lprobs_and_target(model, net_output, sample)
+        lprobs, target,_ = self.get_lprobs_and_target(model, net_output, sample)
         mask = target.ne(self.padding_idx)
         n_correct = torch.sum(
             lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask))
