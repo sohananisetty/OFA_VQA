@@ -21,14 +21,14 @@ from ctl.vqa_arguments import VQAArguments
 
 def main(args_base ,args , training_args):
 
+    tokenizer = OFATokenizer.from_pretrained(args.pretrained)
 
     if len(os.listdir(training_args.output_dir)) == 0:
-        tokenizer = OFATokenizer.from_pretrained(args.pretrained)
         model = OFAModelForVQA.from_pretrained(args.pretrained, use_cache=False)
+        args_base.resume = False
 
-    else:
-        tokenizer = OFATokenizer.from_pretrained(args.output)
-        model = OFAModelForVQA.from_pretrained(args.output, use_cache=False)
+    # else:
+    #     model = OFAModelForVQA.from_pretrained(args.output, use_cache=False)
 
 
     trainer = VQATrainer(
@@ -39,11 +39,10 @@ def main(args_base ,args , training_args):
         wandb_every = args_base.wandb_every,
         data_folder=args_base.data_folder
 
-        
-
-    
-
     ).cuda()
+
+
+    trainer.train(args_base.resume)
     
 
 
@@ -52,7 +51,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
     parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA_VQA/OFA-tiny')
-    parser.add_argument('--resume', default=True, type = bool)
+    parser.add_argument('--resume', default=False, type = bool)
     parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints")
     parser.add_argument('--evaluate', action='store_true')
     parser.add_argument('--seed', default=42, type=int)
@@ -74,7 +73,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_seq_length', default=80, type=int,)
     parser.add_argument('--max_object_length', default=30, type=int,)
     parser.add_argument('--max_tgt_length', default=30, type=int,)
-    parser.add_argument('--patch_image_size', default=224, type=int,)
+    parser.add_argument('--patch_image_size', default=480, type=int,)
 
     args_base = parser.parse_args()
     parser = HfArgumentParser((VQAArguments, TrainingArguments))

@@ -1,6 +1,6 @@
 {
     "output_dir": "output/ofa",
-    "num_train_epochs": 20,
+    "num_train_epochs": 2,
     "max_steps": -1,
     "per_device_train_batch_size": 12,
     "per_device_eval_batch_size": 12,
@@ -27,5 +27,7 @@
     "data_folder":"",
     "freeze_encoder": true,
     "freeze_word_embed": true,
-    "label_smoothing":0.1
+    "label_smoothing":0.1,
+    "patch_image_size":480
+
 }

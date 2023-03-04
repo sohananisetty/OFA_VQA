@@ -161,10 +161,13 @@ class VQATrainer(nn.Module):
 		self.ds = VqaDataset(
 			ann_file=train_file,
 			vqa_root=self.vqa_root,
+			patch_image_size=args.patch_image_size
 		)
 		self.valid_ds = VqaDataset(
 			ann_file=val_file,
 			vqa_root=self.vqa_root,
+			patch_image_size=args.patch_image_size
+
 		)
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
 
@@ -174,7 +177,7 @@ class VQATrainer(nn.Module):
 		self.grad_accum_every = training_args.gradient_accumulation_steps
 
 		self.loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion(label_smoothing = args.label_smoothing)
-		
+
 		self.optim = get_optimizer(self.vqa_model.parameters(), lr = training_args.learning_rate, wd = training_args.weight_decay)
 		self.lr_scheduler = get_scheduler(
 			name = training_args.lr_scheduler_type,
