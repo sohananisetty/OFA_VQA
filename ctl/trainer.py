@@ -5,22 +5,10 @@ from pathlib import Path
 from shutil import rmtree
 from PIL import Image
 import os
-from beartype.typing import Union, List, Optional, Tuple
-from typing_extensions import Annotated
-
-from beartype import beartype
-from beartype.door import is_bearable
-from beartype.vale import Is
 
 import torch
-# import torchaudio
 from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
-# from torchvision import transforms
-
-# from einops import rearrange
-
-# from ema_pytorch import EMA
 
 from PIL import Image
 from torchvision import transforms
@@ -85,17 +73,6 @@ def has_duplicates(tup):
 		counts[el] += 1
 	return any(filter(lambda count: count > 1, counts.values()))
 
-def determine_types(data, config):
-	output = []
-	for el in data:
-		for name, data_type in config.items():
-			if is_bearable(el, data_type):
-				output.append(name)
-				break
-		else:
-			raise TypeError(f'unable to determine type of {data}')
-
-	return tuple(output)
 
 # main trainer class
 
@@ -116,14 +93,15 @@ class VQATrainer(nn.Module):
 		super().__init__()
 
 		kwargs = DistributedDataParallelKwargs(find_unused_parameters = True)
-		self.accelerator = Accelerator()
+		self.accelerator = Accelerator(kwargs_handlers = [kwargs], **accelerate_kwargs)
+
 
 		transformers.set_seed(42)
 
 
 		if self.is_main:
 			wandb.login()
-			wandb.init(project="ofa_vqa")
+			wandb.init(project="ofa_vqav2")
 
 		self.results_folder = Path(training_args.output_dir)
 		self.results_folder.mkdir(parents = True, exist_ok = True)
@@ -189,23 +167,9 @@ class VQATrainer(nn.Module):
 		self.max_grad_norm = max_grad_norm
 
 
-		
-
-		# split for validation
-
-		# if valid_frac > 0:
-		# 	train_size = int((1 - valid_frac) * len(self.ds))
-		# 	valid_size = len(self.ds) - train_size
-		# 	self.ds, self.valid_ds = random_split(self.ds, [train_size, valid_size], generator = torch.Generator().manual_seed(42))
-		# 	self.print(f'training with dataset of {len(self.ds)} samples and validating with randomly splitted {len(self.valid_ds)} samples')
-		# else:
-		# 	self.valid_ds = self.ds
-		self.print(f'training with shared training and valid dataset of {len(self.ds)} samples')
+		self.print(f'training with training and valid dataset of {len(self.ds)} and {len(self.valid_ds)} samples')
 
 		# dataloader
-
-		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=self.max_seq_length)
-		
 
 		self.dl = DataLoader(self.ds, batch_size = self.batch_size, collate_fn=data_collator ,num_workers = training_args.dataloader_num_workers, shuffle = True)
 
@@ -238,6 +202,9 @@ class VQATrainer(nn.Module):
 		hps = {"num_train_steps": self.num_train_steps, "max_seq_length": args.max_seq_length, "learning_rate": training_args.learning_rate}
 		self.accelerator.init_trackers("ofa_vqa", config=hps)        
 
+
+	def print(self, msg):
+		self.accelerator.print(msg)
 			
 	@property
 	def device(self):
@@ -261,11 +228,6 @@ class VQATrainer(nn.Module):
 			optim = self.optim.state_dict(),
 			steps = self.steps
 		)
-
-		if self.use_ema:
-			pkg['ema_model'] = self.ema_vqa_model.state_dict()
-
-
 		torch.save(pkg, path)
 
 	@property
@@ -278,10 +240,6 @@ class VQATrainer(nn.Module):
 		pkg = torch.load(str(path), map_location = 'cpu')
 
 		self.unwrapped_vqa_model.load_state_dict(pkg['model'])
-
-		if self.use_ema:
-			assert 'ema_model' in pkg
-			self.ema_vqa_model.load_state_dict(pkg['ema_model'])
 
 		self.optim.load_state_dict(pkg['optim'])
 		self.steps = pkg["steps"]
@@ -301,7 +259,6 @@ class VQATrainer(nn.Module):
 
 		logs = {}
 
-		# update vae (generator)
 
 		for _ in range(self.grad_accum_every):
 			batch = next(self.dl_iter)
@@ -310,10 +267,18 @@ class VQATrainer(nn.Module):
 			
 			self.accelerator.backward(loss / self.grad_accum_every)
 
-			accum_log(logs, dict(loss = loss.item() / self.grad_accum_every,))
+			accum_log(logs, dict(
+				loss = loss.item() / self.grad_accum_every,
+				acc = logging_output["acc"] / self.grad_accum_every,
+				nll_loss = logging_output["nll_loss"] / self.grad_accum_every,
+				))
 
-			if log_losses:
-				accum_log(logs, logging_output)
+			# if log_losses:
+			# 	accum_log(logs, dict(
+			# 		loss = loss.item() / self.grad_accum_every,
+			# 		acc = logging_output["acc"] / self.grad_accum_every,
+			# 		nll_loss = logging_output["nll_loss"] / self.grad_accum_every,
+			# 		))
 
 		if exists(self.max_grad_norm):
 			self.accelerator.clip_grad_norm_(self.vqa_model.parameters(), self.max_grad_norm)
@@ -341,7 +306,7 @@ class VQATrainer(nn.Module):
 
 		# build pretty printed losses
 
-		losses_str = f"{steps}: ofa model total loss: {logs['loss']:.3f}"
+		losses_str = f"{steps}: ofa model total loss: {logs['loss']:.3f} nll_loss: {logs['nll_loss']} acc: {logs['acc']}"
 		if log_losses:
 			self.accelerator.log({
 				"total_loss": logs['loss'],
@@ -356,30 +321,15 @@ class VQATrainer(nn.Module):
 
 		self.print(losses_str)
 
-		# if self.is_main and (steps % self.save_results_every == 0):
-		# 	models = [(self.unwrapped_soundstream, str(steps))]
-		# 	if self.use_ema:
-		# 		models.append((self.ema_soundstream.ema_model if self.use_ema else self.unwrapped_soundstream, f'{steps}.ema'))
-
-		# 	wave, = next(self.valid_dl_iter)
-		# 	wave = wave
-
-		# 	for model, label in models:
-		# 		model.eval()
-
-		# 		with torch.no_grad():
-		# 			recons = model(wave, return_recons_only = True)
-
-		# 		for ind, recon in enumerate(recons.unbind(dim = 0)):
-		# 			os.makedirs(os.path.join(self.results_folder , "samples" ) , exist_ok=True)
-		# 			filename = (os.path.join(self.results_folder , "samples" , f'sample_{label}.flac'))
-		# 			torchaudio.save(filename, recon.cpu().detach(), self.unwrapped_soundstream.target_sample_hz)
-
-		# 	self.print(f'{steps}: saving sample to {str(os.path.join(self.results_folder , "samples" ))}')
-
+		# if self.is_main and (steps % self.evaluate_every == 0):
+		#	with torch.no_grad():
+			#for batch in self.valid_dl:
+			# 	loss, sample_size, logging_output = self.loss_fnc(self.vqa_model,batch,steps)
+		
+				
 		# save model every so often
 		
-		if self.is_main and not (steps % self.save_model_every):
+		if self.is_main and not (steps % self.save_model_every) and steps>0:
 			os.makedirs(os.path.join(self.results_folder , "results" ) , exist_ok=True)
 			model_path = os.path.join(self.results_folder , "results" ,  f'ofa_vqa.{steps}.pt')
 			self.save(model_path)

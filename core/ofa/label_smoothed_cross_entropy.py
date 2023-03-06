@@ -175,6 +175,8 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
             n_correct, total = self.compute_accuracy(model, net_output, sample)
             n_correct = fitem(n_correct.data)
             total = fitem(total.data)
+            # logging_output["n_correct"] = n_correct
+            # logging_output["total"] = total
             logging_output["acc"] = n_correct/total
 
         return loss, sample_size, logging_output
@@ -191,8 +193,8 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
         #     net_output[0][:, :, self.constraint_end:] = -math.inf
 
 
-        lprobs = model.get_normalized_probs(net_output, log_probs=True) * conf
-        target = model.get_targets(sample)
+        lprobs = model.module.get_normalized_probs(net_output, log_probs=True) * conf
+        target = model.module.get_targets(sample)
 
 
         # if self.ignore_prefix_size > 0:

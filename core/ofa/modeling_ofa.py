@@ -1742,6 +1742,11 @@ class OFAModel(OFAPreTrainedModel):
         self.encoder = OFAEncoder(config, shared)
         self.decoder = OFADecoder(config, shared)
 
+        self.loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion(label_smoothing = 0.1)
+
+
+
+
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -2032,6 +2037,10 @@ class OFAModel(OFAPreTrainedModel):
 
 class OFAModelForVQA(OFAModel):
 
+    # def __init__(self, config: OFAConfig,  **kwargs):
+
+
+
 
 
     def get_targets(self, sample):
@@ -2122,26 +2131,13 @@ class OFAModelForVQA(OFAModel):
         )
 
         loss = None
-        if return_loss:
-            
-            lm_logits = decoder_outputs.last_hidden_state
-            # Shift so that tokens < n predict n
-            shift_logits = lm_logits[..., :-1, :].contiguous()
-            shift_labels = target[..., 1:].contiguous()
-            # Flatten the tokens
-            #loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion()
-            # batch = {
-            # "input_ids": input_ids,
-            # "src_lengths": src_lengths,
-            # "patch_images": patch_images,
-            # "patch_masks": patch_masks,
-            # "decoder_input_ids": decoder_prompts,
-            # "target": target,
-            # }
+        # if return_loss:
 
-            #loss, sample_size, logging_output = loss_fnc(self,batch)
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
+        #     loss, sample_size, logging_output = self.loss_fnc(self,batch,steps)
+
+
+            
+           
 
         return Seq2SeqLMOutput(
             loss=loss,
