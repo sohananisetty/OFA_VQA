@@ -104,7 +104,7 @@ class VQATrainer(nn.Module):
 			wandb.init(project="ofa_vqav2")
 
 		self.results_folder = Path(training_args.output_dir)
-		self.results_folder.mkdir(parents = True, exist_ok = True)
+		self.results_folder.mkdikwargs = DistributedDataParallelKwargs(find_unused_parameters = True)r(parents = True, exist_ok = True)
 
 		self.register_buffer('steps', torch.Tensor([0]))
 		self.vqa_model = vqa_model
@@ -188,6 +188,8 @@ class VQATrainer(nn.Module):
 			self.dl,
 			self.valid_dl
 		)
+
+		self.accelerator.register_for_checkpointing(self.lr_scheduler)
 
 		self.dl_iter = cycle(self.dl)
 		self.valid_dl_iter = cycle(self.valid_dl)
