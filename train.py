@@ -23,14 +23,11 @@ def main(args_base ,args , training_args):
 
     tokenizer = OFATokenizer.from_pretrained(args.pretrained)
 
-    if len(glob(("{training_args.output_dir}/**/*.pt") , recursive  =True)) == 0 and args_base.resume == False:
-        model = OFAModelForVQA.from_pretrained(args.pretrained, use_cache=False)
+    # if len(glob(("{training_args.output_dir}/*.pt") , recursive  =True)) == 0 and args_base.resume == False:
+    model = OFAModelForVQA.from_pretrained(args.pretrained, use_cache=False)
         
 
-        print("using pretrained checkpoint")
-
-    # else:
-    #     model = OFAModelForVQA.from_pretrained(args.output, use_cache=False)
+    print("initialised using pretrained checkpoint")
 
 
     trainer = VQATrainer(
@@ -52,9 +49,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
-    parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA-tiny')
+    parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/ofa-vqa-tiny')
     parser.add_argument('--resume', default=True, type = bool)
-    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints")
+    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/results")
     parser.add_argument('--evaluate', action='store_true')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--fp16', default=True, type=bool)
@@ -104,7 +101,7 @@ if __name__ == '__main__':
 
 
 
-
+#accelerate launch --multi_gpu --mixed_precision=fp16 --num_processes=2 
 
 
 

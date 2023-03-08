@@ -12,7 +12,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from core.logging import metrics
 from torch.nn.modules.loss import _Loss
 
 
@@ -180,6 +179,8 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
             logging_output["acc"] = n_correct/total
 
         return loss, sample_size, logging_output
+    
+    
         
 
     def get_lprobs_and_target(self, model, net_output, sample):
@@ -246,66 +247,66 @@ class AdjustLabelSmoothedCrossEntropyCriterion(_Loss):
         total = torch.sum(mask)
         return n_correct, total
 
-    @classmethod
-    def reduce_metrics(cls, logging_outputs) -> None:
-        """Aggregate logging outputs from data parallel training."""
-        loss_sum = sum(log.get("loss", 0) for log in logging_outputs)
-        loss_sum_v1 = sum(log.get("loss_v1", 0) for log in logging_outputs)
-        loss_sum_v2 = sum(log.get("loss_v2", 0) for log in logging_outputs)
-        nll_loss_sum = sum(log.get("nll_loss", 0) for log in logging_outputs)
-        ntokens = sum(log.get("ntokens", 0) for log in logging_outputs)
-        nsentences = sum(log.get("nsentences", 0) for log in logging_outputs)
-        sample_size = sum(log.get("sample_size", 0) for log in logging_outputs)
-        sample_size_v1 = sum(log.get("sample_size_v1", 0) for log in logging_outputs)
-        sample_size_v2 = sum(log.get("sample_size_v2", 0) for log in logging_outputs)
+    # @classmethod
+    # def reduce_metrics(cls, logging_outputs) -> None:
+    #     """Aggregate logging outputs from data parallel training."""
+    #     loss_sum = sum(log.get("loss", 0) for log in logging_outputs)
+    #     loss_sum_v1 = sum(log.get("loss_v1", 0) for log in logging_outputs)
+    #     loss_sum_v2 = sum(log.get("loss_v2", 0) for log in logging_outputs)
+    #     nll_loss_sum = sum(log.get("nll_loss", 0) for log in logging_outputs)
+    #     ntokens = sum(log.get("ntokens", 0) for log in logging_outputs)
+    #     nsentences = sum(log.get("nsentences", 0) for log in logging_outputs)
+    #     sample_size = sum(log.get("sample_size", 0) for log in logging_outputs)
+    #     sample_size_v1 = sum(log.get("sample_size_v1", 0) for log in logging_outputs)
+    #     sample_size_v2 = sum(log.get("sample_size_v2", 0) for log in logging_outputs)
 
-        metrics.log_scalar(
-            "loss", loss_sum / sample_size, sample_size, round=3
-        )
-        metrics.log_scalar(
-            "loss_v1", loss_sum_v1 / max(sample_size_v1, 1), max(sample_size_v1, 1), round=3
-        )
-        metrics.log_scalar(
-            "loss_v2", loss_sum_v2 / max(sample_size_v2, 1), max(sample_size_v2, 1), round=3
-        )
-        metrics.log_scalar(
-            "nll_loss", nll_loss_sum / sample_size, ntokens, round=3
-        )
-        metrics.log_derived(
-            "ppl", lambda meters: get_perplexity(meters["nll_loss"].avg)
-        )
+    #     metrics.log_scalar(
+    #         "loss", loss_sum / sample_size, sample_size, round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "loss_v1", loss_sum_v1 / max(sample_size_v1, 1), max(sample_size_v1, 1), round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "loss_v2", loss_sum_v2 / max(sample_size_v2, 1), max(sample_size_v2, 1), round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "nll_loss", nll_loss_sum / sample_size, ntokens, round=3
+    #     )
+    #     metrics.log_derived(
+    #         "ppl", lambda meters: get_perplexity(meters["nll_loss"].avg)
+    #     )
 
-        metrics.log_scalar(
-            "ntokens", ntokens, 1, round=3
-        )
-        metrics.log_scalar(
-            "nsentences", nsentences, 1, round=3
-        )
-        metrics.log_scalar(
-            "sample_size", sample_size, 1, round=3
-        )
-        metrics.log_scalar(
-            "sample_size_v1", sample_size_v1, 1, round=3
-        )
-        metrics.log_scalar(
-            "sample_size_v2", sample_size_v2, 1, round=3
-        )
+    #     metrics.log_scalar(
+    #         "ntokens", ntokens, 1, round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "nsentences", nsentences, 1, round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "sample_size", sample_size, 1, round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "sample_size_v1", sample_size_v1, 1, round=3
+    #     )
+    #     metrics.log_scalar(
+    #         "sample_size_v2", sample_size_v2, 1, round=3
+    #     )
 
-        total = fitem(sum(log.get("total", 0) for log in logging_outputs))
-        if total > 0:
-            metrics.log_scalar("total", total)
-            n_correct = fitem(
-                sum(log.get("n_correct", 0) for log in logging_outputs)
-            )
-            metrics.log_scalar("n_correct", n_correct)
-            metrics.log_derived(
-                "accuracy",
-                lambda meters: round(
-                    meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
-                )
-                if meters["total"].sum > 0
-                else float("nan"),
-            )
+    #     total = fitem(sum(log.get("total", 0) for log in logging_outputs))
+    #     if total > 0:
+    #         metrics.log_scalar("total", total)
+    #         n_correct = fitem(
+    #             sum(log.get("n_correct", 0) for log in logging_outputs)
+    #         )
+    #         metrics.log_scalar("n_correct", n_correct)
+    #         metrics.log_derived(
+    #             "accuracy",
+    #             lambda meters: round(
+    #                 meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
+    #             )
+    #             if meters["total"].sum > 0
+    #             else float("nan"),
+    #         )
 
     @staticmethod
     def logging_outputs_can_be_summed() -> bool:

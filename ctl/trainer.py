@@ -26,7 +26,7 @@ from core.ofa import OFATokenizer
 from core.ofa.modeling_ofa import OFAModelForVQA
 from core.optimizer import get_optimizer
 
-from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset
+from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset, VqaStackDataset,CLEVRVQADataset
 
 # from core.ofa.generate import sequence_generator
 # from core.datasets.file_dataset import FileDataset
@@ -104,7 +104,7 @@ class VQATrainer(nn.Module):
 			wandb.init(project="ofa_vqav2")
 
 		self.results_folder = Path(training_args.output_dir)
-		self.results_folder.mkdikwargs = DistributedDataParallelKwargs(find_unused_parameters = True)r(parents = True, exist_ok = True)
+		self.results_folder.mkdir(parents = True, exist_ok = True)
 
 		self.register_buffer('steps', torch.Tensor([0]))
 		self.vqa_model = vqa_model
@@ -118,35 +118,33 @@ class VQATrainer(nn.Module):
 		total = sum(p.numel() for p in self.vqa_model.parameters() if p.requires_grad)
 		print("Total training params: %.2fM" % (total / 1e6))
 
-		# tsv_dataset = FileDataset(args.data_folder, [0,5,2,3,4])
-		# self.ds = VqaGenDataset(
-		# 	split = "train",
-		# 	dataset = tsv_dataset,
-		# 	max_src_length=128,
-		# 	max_object_length=30,
-		# 	max_tgt_length=30,
-		# 	patch_image_size=224,
-		# 	add_object=False,
-		# 	imagenet_default_mean_and_std=False,
-		# 	prompt_type="none"
-		# )
-
 		
 		train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
 		val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
 		self.vqa_root = '/srv/datasets/coco/'
 
-		self.ds = VqaDataset(
-			ann_file=train_file,
-			vqa_root=self.vqa_root,
+		# self.ds = VqaDataset(
+		# 	ann_file=train_file,
+		# 	vqa_root=self.vqa_root,
+		# 	patch_image_size=args.patch_image_size
+		# )
+		# self.valid_ds = VqaDataset(
+		# 	ann_file=val_file,
+		# 	vqa_root=self.vqa_root,
+		# 	patch_image_size=args.patch_image_size
+
+		# )
+
+		self.ds = CLEVRVQADataset(
+			split="trainA",
 			patch_image_size=args.patch_image_size
 		)
-		self.valid_ds = VqaDataset(
-			ann_file=val_file,
-			vqa_root=self.vqa_root,
+		self.valid_ds = CLEVRVQADataset(
+			split="valA",
 			patch_image_size=args.patch_image_size
 
 		)
+
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
 
 
@@ -332,11 +330,11 @@ class VQATrainer(nn.Module):
 		# save model every so often
 		
 		if self.is_main and not (steps % self.save_model_every) and steps>0:
-			os.makedirs(os.path.join(self.results_folder , "results" ) , exist_ok=True)
-			model_path = os.path.join(self.results_folder , "results" ,  f'ofa_vqa.{steps}.pt')
+			os.makedirs(os.path.join(self.results_folder ) , exist_ok=True)
+			model_path = os.path.join(self.results_folder ,  f'ofa_vqa.{steps}.pt')
 			self.save(model_path)
 
-			self.print(f'{steps}: saving model to {str(os.path.join(self.results_folder , "results" ) )}')
+			self.print(f'{steps}: saving model to {str(os.path.join(self.results_folder) )}')
 
 
 		self.steps += 1
@@ -346,7 +344,7 @@ class VQATrainer(nn.Module):
 
 
 		if resume:
-			save_path = os.path.join(self.results_folder , "results")
+			save_path = os.path.join(self.results_folder)
 			chk = sorted(os.listdir(save_path) , key = lambda x: int(x.split('.')[1]))[-1]
 			print("resuming from ", os.path.join(save_path , chk))
 			self.load(os.path.join(save_path , chk))

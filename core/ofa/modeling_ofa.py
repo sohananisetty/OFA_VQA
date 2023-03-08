@@ -22,7 +22,6 @@ from dataclasses import dataclass
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 
 from transformers.activations import ACT2FN
 from transformers.file_utils import (
@@ -41,7 +40,6 @@ from transformers.modeling_outputs import (
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import logging
 from .configuration_ofa import OFAConfig
-from .label_smoothed_cross_entropy import AdjustLabelSmoothedCrossEntropyCriterion
 from .resnet import ResNet
 from torch import Tensor
 from typing import Dict, List, Optional, Tuple
@@ -1742,11 +1740,6 @@ class OFAModel(OFAPreTrainedModel):
         self.encoder = OFAEncoder(config, shared)
         self.decoder = OFADecoder(config, shared)
 
-        self.loss_fnc = AdjustLabelSmoothedCrossEntropyCriterion(label_smoothing = 0.1)
-
-
-
-
         # Initialize weights and apply final processing
         self.post_init()
 
@@ -2082,7 +2075,6 @@ class OFAModelForVQA(OFAModel):
             output_attentions=False,
             output_hidden_states=False,
             return_dict=False,
-            return_loss=False,
             target = None,
 
     ):
@@ -2130,8 +2122,9 @@ class OFAModelForVQA(OFAModel):
             output_hidden_states=output_hidden_states,
         )
 
-        loss = None
+        # loss = None
         # if return_loss:
+        #     loss, nll_loss, ntokens = self.compute_loss(self, net_output, sample, update_num, reduce=reduce)
 
         #     loss, sample_size, logging_output = self.loss_fnc(self,batch,steps)
 
@@ -2140,7 +2133,6 @@ class OFAModelForVQA(OFAModel):
            
 
         return Seq2SeqLMOutput(
-            loss=loss,
             logits=decoder_outputs.last_hidden_state,
             past_key_values=decoder_outputs.past_key_values,
             decoder_hidden_states=decoder_outputs.hidden_states,
