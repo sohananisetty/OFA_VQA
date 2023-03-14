@@ -119,9 +119,9 @@ class VQATrainer(nn.Module):
 		print("Total training params: %.2fM" % (total / 1e6))
 
 		
-		train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
-		val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
-		self.vqa_root = '/srv/datasets/coco/'
+		# train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
+		# val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
+		# self.vqa_root = '/srv/datasets/coco/'
 
 		# self.ds = VqaDataset(
 		# 	ann_file=train_file,
@@ -133,6 +133,21 @@ class VQATrainer(nn.Module):
 		# 	vqa_root=self.vqa_root,
 		# 	patch_image_size=args.patch_image_size
 
+		# )
+
+		train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/' ,"stack_train_questions.json")
+		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/' ,"stack_train_questions.json")
+		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/images'
+
+		# self.ds = VqaStackDataset(
+		# 	ann_file=train_file,
+		# 	vqa_root=self.vqa_root,
+		# 	patch_image_size=args.patch_image_size
+		# )
+		# self.valid_ds = VqaStackDataset(
+		# 	ann_file=val_file,
+		# 	vqa_root=self.vqa_root,
+		# 	patch_image_size=args.patch_image_size
 		# )
 
 		self.ds = CLEVRVQADataset(

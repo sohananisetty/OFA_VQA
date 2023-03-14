@@ -49,9 +49,9 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
-    parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/ofa-vqa-tiny')
+    parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA-base-vqa')
     parser.add_argument('--resume', default=True, type = bool)
-    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/results")
+    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/base_vqa")
     parser.add_argument('--evaluate', action='store_true')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--fp16', default=True, type=bool)

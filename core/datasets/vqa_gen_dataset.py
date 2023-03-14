@@ -355,6 +355,12 @@ class VqaStackDataset(Dataset):
         question = question.rstrip('\n')
         question = question.strip(' ')
 
+        if "false" in question:
+            question.replace("false" , "no")
+
+        if "true" in question:
+            question.replace("true" , "yes")
+
         # truncate question
         question_words = question.split(' ')
         if max_ques_words is not None and len(question_words) > max_ques_words:
