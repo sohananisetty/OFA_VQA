@@ -227,7 +227,19 @@ class VqaDataset(Dataset):
         if max_ques_words is not None and len(question_words) > max_ques_words:
             question = ' '.join(question_words[:max_ques_words])
 
-        return question           
+        return question         
+
+    def pre_answer(self, answer):
+        answer = answer.lower().lstrip(",.!?*#:;~").replace('-', ' ').replace('/', ' ')
+
+        answer = re.sub(
+            r"\s{2,}",
+            ' ',
+            answer,
+        )
+        answer = answer.rstrip('\n')
+        answer = answer.strip(' ')
+        return answer           
         
     def __len__(self):
         return len(self.ann)
@@ -282,7 +294,7 @@ class VqaDataset(Dataset):
 
             if ann['dataset']=='stack':
             
-                answer = ann['answer']
+                answer = self.pre_answer(str(ann['answer']))
                 conf = torch.tensor([1])
 
 
@@ -327,8 +339,11 @@ class VqaStackDataset(Dataset):
         self.patch_resize_transform = transforms.Compose([
             lambda image: image.convert("RGB"),
             transforms.Resize((patch_image_size, patch_image_size), interpolation=Image.BICUBIC),
+            transforms.ColorJitter(brightness=.3),
+            transforms.GaussianBlur(kernel_size=(5, 5)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
+           
         ])
         self.vqa_root = vqa_root
         self.add_object = add_object
@@ -355,11 +370,7 @@ class VqaStackDataset(Dataset):
         question = question.rstrip('\n')
         question = question.strip(' ')
 
-        if "false" in question:
-            question.replace("false" , "no")
-
-        if "true" in question:
-            question.replace("true" , "yes")
+        
 
         # truncate question
         question_words = question.split(' ')
@@ -367,6 +378,18 @@ class VqaStackDataset(Dataset):
             question = ' '.join(question_words[:max_ques_words])
 
         return question           
+    
+    def pre_answer(self, answer):
+        answer = answer.lower().lstrip(",.!?*#:;~").replace('-', ' ').replace('/', ' ')
+
+        answer = re.sub(
+            r"\s{2,}",
+            ' ',
+            answer,
+        )
+        answer = answer.rstrip('\n')
+        answer = answer.strip(' ')
+        return answer           
         
     def __len__(self):
         return len(self.ann)
@@ -396,9 +419,18 @@ class VqaStackDataset(Dataset):
         #     return image, question, question_id
 
 
-        if self.split=='train':                       
-            answer = str(ann['answer'])
-            conf = torch.tensor([1])
+        # if self.split=='train':                       
+        answer = self.pre_answer(str(ann['answer']))
+        conf = torch.tensor([1])
+
+        if "false" in answer.lower():
+            
+            answer = answer.replace("False" , "no")
+            # question.replace("false" , "no")
+
+        if "true" in answer.lower():
+            answer = answer.replace("True" , "yes")
+            # question.replace("true" , "yes")
 
         example = {
         "source": question,
@@ -439,6 +471,8 @@ class CLEVRVQADataset(Dataset):
         self.patch_resize_transform = transforms.Compose([
             lambda image: image.convert("RGB"),
             transforms.Resize((patch_image_size, patch_image_size), interpolation=Image.BICUBIC),
+            transforms.ColorJitter(brightness=.3),
+            transforms.GaussianBlur(kernel_size=(5, 5)),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std),
         ])
@@ -468,7 +502,19 @@ class CLEVRVQADataset(Dataset):
         if max_ques_words is not None and len(question_words) > max_ques_words:
             question = ' '.join(question_words[:max_ques_words])
 
-        return question           
+        return question    
+
+    def pre_answer(self, answer):
+        answer = answer.lower().lstrip(",.!?*#:;~").replace('-', ' ').replace('/', ' ')
+
+        answer = re.sub(
+            r"\s{2,}",
+            ' ',
+            answer,
+        )
+        answer = answer.rstrip('\n')
+        answer = answer.strip(' ')
+        return answer                  
   
 
     def __getitem__(self, idx):
@@ -482,7 +528,7 @@ class CLEVRVQADataset(Dataset):
         question = self.quesions[idx]
         
         question_text = question["question"]
-        answer_text = str(question["answer"])
+        answer_text = self.pre_answer(str(question["answer"]))
         image_indx = question["image_filename"].split("_")[-1].split(".")[0]
         
         if image_indx in blacklist_imgs:
@@ -527,7 +573,8 @@ def build_predicates(objects, unary, binary):
 
 class LeonardoVQADataset(Dataset):
     def __init__(
-        self, data_dir, split,n_objects = 4,
+        self, data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
+        split = 'valid',n_objects = 4,
          view=3, randview=True, max_ques_words = 128,prompt_type="none",
         patch_image_size = 224, imagenet_default_mean_and_std = False,
     ):
@@ -606,7 +653,19 @@ class LeonardoVQADataset(Dataset):
         if max_ques_words is not None and len(question_words) > max_ques_words:
             question = ' '.join(question_words[:max_ques_words])
 
-        return question           
+        return question  
+
+    def pre_answer(self, answer):
+        answer = answer.lower().lstrip(",.!?*#:;~").replace('-', ' ').replace('/', ' ')
+
+        answer = re.sub(
+            r"\s{2,}",
+            ' ',
+            answer,
+        )
+        answer = answer.rstrip('\n')
+        answer = answer.strip(' ')
+        return answer                    
   
 
     def get_rgb(self, data, idx):
@@ -622,8 +681,8 @@ class LeonardoVQADataset(Dataset):
             obj1, loc = template.split('(')[1].split(')')[0].split(',')
 #             print("on_surface" , obj1 , loc)
             obj1 = objects[int(obj1[-2:])]
-            ques = [f'Is {obj1} block on the {loc} of the robot?',
-                    f'Where is the {obj1} block on the table?'
+            ques = [f'Is {obj1} colored block on the {loc} of the robot?',
+                    f'Where is the {obj1} colored block on the table?'
                    ]
             ans = ['yes' if answer==1 else 'no', loc]
             
@@ -635,9 +694,9 @@ class LeonardoVQADataset(Dataset):
             _, obj1 = template.split('(')[1].split(')')[0].split(',')
 #             print("has_obj" , obj1 ,  objects[int(obj1[-2:])])
             obj1 = objects[int(obj1[-2:])]
-            ques = [f'Does the robot have the {obj1} block in the gripper?', 
-                    f'Is the robot picking up {obj1} block?',
-                    f'Did the robot pick up {obj1} block using the gripper?']
+            ques = [f'Does the robot have the {obj1} colored block in the gripper?', 
+                    f'Is the robot picking up {obj1} colored block?',
+                    f'Did the robot pick up {obj1} colored block using the gripper?']
 
             ans = ['yes' if answer==1 else 'no' , 
                    'yes' if answer==1 else 'no' , 
@@ -651,8 +710,8 @@ class LeonardoVQADataset(Dataset):
             obj1 = template.split('(')[1].split(')')[0].split(',')[0]
 #             print("top_is_clear" , obj1 , objects[int(obj1[-2:])])
             obj1 = objects[int(obj1[-2:])]
-            ques = [f'Is there anything on the {obj1} block?',
-                   f'Is the top of {obj1} block clear?',
+            ques = [f'Is there anything on the {obj1} colored block?',
+                   f'Is the top of {obj1} colored block clear?',
                    ]
             ans = ['no' if answer==1 else 'yes',
                   'yes' if answer==1 else 'no' ]
@@ -671,11 +730,11 @@ class LeonardoVQADataset(Dataset):
             obj3 = objects[other_objs[0]]
             obj4 = objects[other_objs[1]]
 
-            ques = [f'Is the {obj2} block on the {obj1} block?',
-                    f'Is the {obj3} block on the {obj1} block?',
-                    f'Is the {obj4} block on the {obj1} block?',
-                    f'Is the {obj1} block on the {obj2} block?',
-                    f'Which color block on the {obj1} block?'
+            ques = [f'Is the {obj2} block on the {obj1} colored block?',
+                    f'Is the {obj3} block on the {obj1} colored block?',
+                    f'Is the {obj4} block on the {obj1} colored block?',
+                    f'Is the {obj1} block on the {obj2} colored block?',
+                    f'Which color block on the {obj1} colored block?'
                    ]
 
             ans = ['yes' if answer==1 else 'no' ,
@@ -708,6 +767,8 @@ class LeonardoVQADataset(Dataset):
         # Load RGB from H5 file
         image = self.get_rgb(data, frame_idx)
         patch_mask = torch.tensor([True])
+
+        answer= self.pre_answer(answer)
 
         
         example = {

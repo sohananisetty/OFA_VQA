@@ -12,7 +12,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from PIL import Image
 from torchvision import transforms
-
+import itertools
 from transformers import AdamW, get_scheduler
 from accelerate import Accelerator
 from accelerate.utils import DistributedDataParallelKwargs
@@ -26,7 +26,7 @@ from core.ofa import OFATokenizer
 from core.ofa.modeling_ofa import OFAModelForVQA
 from core.optimizer import get_optimizer
 
-from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset, VqaStackDataset,CLEVRVQADataset
+from core.datasets.vqa_gen_dataset import VqaGenDataset , VQACollator, VqaDataset, VqaStackDataset,CLEVRVQADataset,LeonardoVQADataset
 
 # from core.ofa.generate import sequence_generator
 # from core.datasets.file_dataset import FileDataset
@@ -101,7 +101,7 @@ class VQATrainer(nn.Module):
 
 		if self.is_main:
 			wandb.login()
-			wandb.init(project="ofa_vqav2")
+			wandb.init(project="ofa_st_cl_leo")
 
 		self.results_folder = Path(training_args.output_dir)
 		self.results_folder.mkdir(parents = True, exist_ok = True)
@@ -139,26 +139,52 @@ class VQATrainer(nn.Module):
 		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/' ,"stack_train_questions.json")
 		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/images'
 
-		# self.ds = VqaStackDataset(
-		# 	ann_file=train_file,
-		# 	vqa_root=self.vqa_root,
-		# 	patch_image_size=args.patch_image_size
-		# )
-		# self.valid_ds = VqaStackDataset(
-		# 	ann_file=val_file,
-		# 	vqa_root=self.vqa_root,
-		# 	patch_image_size=args.patch_image_size
-		# )
+		stack_ds = VqaStackDataset(
+			ann_file=train_file,
+			vqa_root=self.vqa_root,
+			patch_image_size=args.patch_image_size
+		)
+		stack_valid_ds = VqaStackDataset(
+			ann_file=val_file,
+			vqa_root=self.vqa_root,
+			patch_image_size=args.patch_image_size
+		)
 
-		self.ds = CLEVRVQADataset(
+		clevr_ds = CLEVRVQADataset(
 			split="trainA",
 			patch_image_size=args.patch_image_size
 		)
-		self.valid_ds = CLEVRVQADataset(
+		clevr_valid_ds = CLEVRVQADataset(
 			split="valA",
 			patch_image_size=args.patch_image_size
 
 		)
+
+		leonardo_ds = LeonardoVQADataset(
+			data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
+			split="valid",
+			patch_image_size=args.patch_image_size
+		)
+		leonardo_valid_ds = LeonardoVQADataset(
+			data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
+			split="test_4obj",
+			patch_image_size=args.patch_image_size
+
+		)
+
+
+		self.ds = torch.utils.data.ConcatDataset([stack_ds, clevr_ds,leonardo_ds])
+		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, clevr_valid_ds, leonardo_valid_ds])
+
+		weights_train = [
+		[self.ds.__len__() / stack_ds.__len__()] * stack_ds.__len__(),
+		[self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
+		[self.ds.__len__() / leonardo_ds.__len__()] * leonardo_ds.__len__(),
+		]
+		weights_train = list(itertools.chain.from_iterable(weights_train))
+		sampler_train = torch.utils.data.WeightedRandomSampler(weights=weights_train, num_samples=len(weights_train))
+
+
 
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
 
@@ -184,7 +210,7 @@ class VQATrainer(nn.Module):
 
 		# dataloader
 
-		self.dl = DataLoader(self.ds, batch_size = self.batch_size, collate_fn=data_collator ,num_workers = training_args.dataloader_num_workers, shuffle = True)
+		self.dl = DataLoader(self.ds, batch_size = self.batch_size, collate_fn=data_collator ,sampler = sampler_train,num_workers = training_args.dataloader_num_workers, shuffle = False)
 
 		self.valid_dl = DataLoader(self.valid_ds, batch_size = self.batch_size, collate_fn=data_collator,num_workers = training_args.dataloader_num_workers, shuffle = False)
 
