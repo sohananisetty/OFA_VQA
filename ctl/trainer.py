@@ -135,9 +135,9 @@ class VQATrainer(nn.Module):
 
 		# )
 
-		train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/' ,"stack_train_questions.json")
-		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/' ,"stack_train_questions.json")
-		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/Relational_dataset/images'
+		train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/' ,"stack_train_questions.json")
+		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/' ,"stack_train_questions.json")
+		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/images'
 
 		stack_ds = VqaStackDataset(
 			ann_file=train_file,
@@ -173,17 +173,18 @@ class VQATrainer(nn.Module):
 		)
 
 
-		self.ds = torch.utils.data.ConcatDataset([stack_ds, clevr_ds,leonardo_ds])
-		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, clevr_valid_ds, leonardo_valid_ds])
+		self.ds = torch.utils.data.ConcatDataset([stack_ds, clevr_ds])
+		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, clevr_valid_ds])
 
 		weights_train = [
-		[self.ds.__len__() / stack_ds.__len__()] * stack_ds.__len__(),
+		[2*self.ds.__len__() / (stack_ds.__len__())] * stack_ds.__len__(),
 		[self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
-		[self.ds.__len__() / leonardo_ds.__len__()] * leonardo_ds.__len__(),
+		# [3*self.ds.__len__() / leonardo_ds.__len__()] * leonardo_ds.__len__(),
 		]
 		weights_train = list(itertools.chain.from_iterable(weights_train))
 		sampler_train = torch.utils.data.WeightedRandomSampler(weights=weights_train, num_samples=len(weights_train))
 
+		print("weights: ", 2*self.ds.__len__() / (stack_ds.__len__()), self.ds.__len__() / clevr_ds.__len__() , 5*self.ds.__len__() / leonardo_ds.__len__())
 
 
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
@@ -327,23 +328,6 @@ class VQATrainer(nn.Module):
 		self.optim.step()
 		self.lr_scheduler.step()
 		self.optim.zero_grad()
-
-		# for _ in range(self.grad_accum_every):
-		# 	wave, = next(self.dl_iter)
-
-		# 	# print(wave.shape)
-		# 	# wave = wave.to(device)
-
-		# 	discr_losses = self.soundstream(
-		# 		wave,
-		# 		apply_grad_penalty = apply_grad_penalty,
-		# 		return_discr_loss = True,
-		# 		return_discr_losses_separately = True
-		# 	)
-
-		# 	for name, discr_loss in discr_losses:
-		# 		self.accelerator.backward(discr_loss / self.grad_accum_every, retain_graph = True)
-		# 		accum_log(logs, {name: discr_loss.item() / self.grad_accum_every})
 
 		# build pretty printed losses
 
