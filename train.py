@@ -51,13 +51,13 @@ if __name__ == '__main__':
     parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
     parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA-base-vqa')
     parser.add_argument('--resume', default=True, type = bool)
-    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/base_vqa")
+    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/base_vqa_bowl")
     parser.add_argument('--evaluate', action='store_true')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--fp16', default=True, type=bool)
 
-    parser.add_argument('--per_device_train_batch_size', default=24, type=int,)
-    parser.add_argument('--per_device_eval_batch_size', default=12, type=int,)
+    parser.add_argument('--per_device_train_batch_size', default=36, type=int,)
+    parser.add_argument('--per_device_eval_batch_size', default=36, type=int,)
     parser.add_argument('--gradient_accumulation_steps', default=8, type=int,)
     parser.add_argument('--label_smoothing', default=0.1, type=float,)
 

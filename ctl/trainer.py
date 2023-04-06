@@ -101,7 +101,7 @@ class VQATrainer(nn.Module):
 
 		if self.is_main:
 			wandb.login()
-			wandb.init(project="ofa_st_cl_leo")
+			wandb.init(project="ofa_st_cl_bl")
 
 		self.results_folder = Path(training_args.output_dir)
 		self.results_folder.mkdir(parents = True, exist_ok = True)
@@ -139,6 +139,10 @@ class VQATrainer(nn.Module):
 		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/' ,"stack_train_questions.json")
 		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/images'
 
+		bowl_train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/bowl_place/' ,"bowl_train_questions.json")
+		bowl_val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/bowl_place/' ,"bowl_train_questions.json")
+		self.bowl_vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/bowl_place/images'
+
 		stack_ds = VqaStackDataset(
 			ann_file=train_file,
 			vqa_root=self.vqa_root,
@@ -147,6 +151,17 @@ class VQATrainer(nn.Module):
 		stack_valid_ds = VqaStackDataset(
 			ann_file=val_file,
 			vqa_root=self.vqa_root,
+			patch_image_size=args.patch_image_size
+		)
+
+		bowl_ds = VqaStackDataset(
+			ann_file=bowl_train_file,
+			vqa_root=self.bowl_vqa_root,
+			patch_image_size=args.patch_image_size
+		)
+		bowl_valid_ds = VqaStackDataset(
+			ann_file=bowl_val_file,
+			vqa_root=self.bowl_vqa_root,
 			patch_image_size=args.patch_image_size
 		)
 
@@ -173,18 +188,19 @@ class VQATrainer(nn.Module):
 		)
 
 
-		self.ds = torch.utils.data.ConcatDataset([stack_ds, clevr_ds])
-		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, clevr_valid_ds])
+		self.ds = torch.utils.data.ConcatDataset([stack_ds, bowl_ds , clevr_ds])
+		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, bowl_valid_ds, clevr_valid_ds])
 
 		weights_train = [
 		[2*self.ds.__len__() / (stack_ds.__len__())] * stack_ds.__len__(),
-		[self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
+		[10*self.ds.__len__() / (bowl_ds.__len__())] * bowl_ds.__len__(),
+		[5*self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
 		# [3*self.ds.__len__() / leonardo_ds.__len__()] * leonardo_ds.__len__(),
 		]
 		weights_train = list(itertools.chain.from_iterable(weights_train))
 		sampler_train = torch.utils.data.WeightedRandomSampler(weights=weights_train, num_samples=len(weights_train))
 
-		print("weights: ", 2*self.ds.__len__() / (stack_ds.__len__()), self.ds.__len__() / clevr_ds.__len__() , 5*self.ds.__len__() / leonardo_ds.__len__())
+		print("weights: ", 2*self.ds.__len__() / (stack_ds.__len__()), 5*self.ds.__len__() / (bowl_ds.__len__()), 5*self.ds.__len__() / clevr_ds.__len__())
 
 
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)

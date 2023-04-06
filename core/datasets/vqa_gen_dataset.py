@@ -324,11 +324,6 @@ class VqaStackDataset(Dataset):
 
         self.ann = self.ann["questions"]
 
-        
-
-        print()
-
-
         if imagenet_default_mean_and_std:
             mean = IMAGENET_DEFAULT_MEAN
             std = IMAGENET_DEFAULT_STD
@@ -370,6 +365,8 @@ class VqaStackDataset(Dataset):
         question = question.rstrip('\n')
         question = question.strip(' ')
 
+        question = question.replace("most" , "furthest")
+
         
 
         # truncate question
@@ -400,7 +397,17 @@ class VqaStackDataset(Dataset):
         
       
         image_path = os.path.join(self.vqa_root,ann['image_filename'])
+
+        # try:
         image = Image.open(image_path).convert('RGB')
+        # print(f"loading image {image_path} failed")
+        # except:
+            # new_index = np.random.choice(len(self.ann))
+            # ann = self.ann[new_index]
+            # image_path = os.path.join(self.vqa_root,ann['image_filename'])
+            # image = Image.open(image_path).convert('RGB')
+
+
 
     
             
