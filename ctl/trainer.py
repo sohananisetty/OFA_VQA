@@ -19,7 +19,8 @@ from accelerate.utils import DistributedDataParallelKwargs
 from accelerate import DistributedType
 import wandb
 import transformers
-
+from tqdm import tqdm
+from collections import Counter
 
 from core.ofa.label_smoothed_cross_entropy import AdjustLabelSmoothedCrossEntropyCriterion
 from core.ofa import OFATokenizer
@@ -85,6 +86,7 @@ class VQATrainer(nn.Module):
 		args,
 		training_args,
 		wandb_every = 100,
+		evaluate_every = 5000,
 		apply_grad_penalty_every = 4,
 		valid_frac = 0.01,
 		max_grad_norm = 0.5,
@@ -99,9 +101,7 @@ class VQATrainer(nn.Module):
 		transformers.set_seed(42)
 
 
-		if self.is_main:
-			wandb.login()
-			wandb.init(project="ofa_st_cl_bl")
+		
 
 		self.results_folder = Path(training_args.output_dir)
 		self.results_folder.mkdir(parents = True, exist_ok = True)
@@ -119,25 +119,29 @@ class VQATrainer(nn.Module):
 		print("Total training params: %.2fM" % (total / 1e6))
 
 		
-		# train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
-		# val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
-		# self.vqa_root = '/srv/datasets/coco/'
+		coco_train_file = [os.path.join(data_folder ,"vqa_train_ocr.json")]
+		coco_val_file = [os.path.join(data_folder ,"vqa_minival_ocr.json")]
+		self.coco_vqa_root = '/srv/datasets/coco/'
 
-		# self.ds = VqaDataset(
-		# 	ann_file=train_file,
-		# 	vqa_root=self.vqa_root,
-		# 	patch_image_size=args.patch_image_size
-		# )
-		# self.valid_ds = VqaDataset(
-		# 	ann_file=val_file,
-		# 	vqa_root=self.vqa_root,
-		# 	patch_image_size=args.patch_image_size
+		coco_ds = VqaDataset(
+			ann_file=coco_train_file,
+			vqa_root=self.coco_vqa_root,
+			patch_image_size=args.patch_image_size
+		)
+		coco_valid_ds = VqaDataset(
+			ann_file=coco_val_file,
+			vqa_root=self.coco_vqa_root,
+			patch_image_size=args.patch_image_size
 
-		# )
+		)
 
 		train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/' ,"stack_train_questions.json")
 		val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/' ,"stack_train_questions.json")
-		self.vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/images'
+		self.stack_vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/block_stacking/images'
+
+		table_train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/table_relation/' ,"train_questions.json")
+		table_val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/table_relation/' ,"train_questions.json")
+		self.table_vqa_root = '/srv/scratch/sanisetty3/DLM/sornet/data/table_relation/images'
 
 		bowl_train_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/bowl_place/' ,"bowl_train_questions.json")
 		bowl_val_file = os.path.join('/srv/scratch/sanisetty3/DLM/sornet/data/bowl_place/' ,"bowl_train_questions.json")
@@ -145,12 +149,12 @@ class VQATrainer(nn.Module):
 
 		stack_ds = VqaStackDataset(
 			ann_file=train_file,
-			vqa_root=self.vqa_root,
+			vqa_root=self.stack_vqa_root,
 			patch_image_size=args.patch_image_size
 		)
 		stack_valid_ds = VqaStackDataset(
 			ann_file=val_file,
-			vqa_root=self.vqa_root,
+			vqa_root=self.stack_vqa_root,
 			patch_image_size=args.patch_image_size
 		)
 
@@ -164,6 +168,13 @@ class VQATrainer(nn.Module):
 			vqa_root=self.bowl_vqa_root,
 			patch_image_size=args.patch_image_size
 		)
+		table_ds = VqaStackDataset(
+			ann_file=table_train_file,
+			vqa_root=self.table_vqa_root,
+			patch_image_size=args.patch_image_size
+		)
+
+
 
 		clevr_ds = CLEVRVQADataset(
 			split="trainA",
@@ -175,32 +186,33 @@ class VQATrainer(nn.Module):
 
 		)
 
-		leonardo_ds = LeonardoVQADataset(
-			data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
-			split="valid",
-			patch_image_size=args.patch_image_size
-		)
-		leonardo_valid_ds = LeonardoVQADataset(
-			data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
-			split="test_4obj",
-			patch_image_size=args.patch_image_size
+		# leonardo_ds = LeonardoVQADataset(
+		# 	data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
+		# 	split="valid",
+		# 	patch_image_size=args.patch_image_size
+		# )
+		# leonardo_valid_ds = LeonardoVQADataset(
+		# 	data_dir = '/srv/scratch/sanisetty3/DLM/sornet/data/leonardo/',
+		# 	split="test_4obj",
+		# 	patch_image_size=args.patch_image_size
 
-		)
+		# )
 
 
-		self.ds = torch.utils.data.ConcatDataset([stack_ds, bowl_ds , clevr_ds])
-		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, bowl_valid_ds, clevr_valid_ds])
+		self.ds = torch.utils.data.ConcatDataset([stack_ds, bowl_ds, table_ds , clevr_ds , coco_ds])
+		self.valid_ds = torch.utils.data.ConcatDataset([stack_valid_ds, bowl_valid_ds])
 
 		weights_train = [
-		[2*self.ds.__len__() / (stack_ds.__len__())] * stack_ds.__len__(),
+		[self.ds.__len__() / (stack_ds.__len__())] * stack_ds.__len__(),
 		[10*self.ds.__len__() / (bowl_ds.__len__())] * bowl_ds.__len__(),
-		[5*self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
-		# [3*self.ds.__len__() / leonardo_ds.__len__()] * leonardo_ds.__len__(),
+		[self.ds.__len__() / (table_ds.__len__())] * table_ds.__len__(),
+		[10*self.ds.__len__() / clevr_ds.__len__()] * clevr_ds.__len__(),
+		[25*self.ds.__len__() / coco_ds.__len__()] * coco_ds.__len__(),
 		]
 		weights_train = list(itertools.chain.from_iterable(weights_train))
 		sampler_train = torch.utils.data.WeightedRandomSampler(weights=weights_train, num_samples=len(weights_train))
 
-		print("weights: ", 2*self.ds.__len__() / (stack_ds.__len__()), 5*self.ds.__len__() / (bowl_ds.__len__()), 5*self.ds.__len__() / clevr_ds.__len__())
+		print("weights: ", self.ds.__len__() / (stack_ds.__len__()), 10*self.ds.__len__() / (bowl_ds.__len__()) ,self.ds.__len__() / (table_ds.__len__()) , 10*self.ds.__len__() / (clevr_ds.__len__()) , 25*self.ds.__len__() / (coco_ds.__len__()))
 
 
 		data_collator = VQACollator(tokenizer=tokenizer, max_seq_length=args.max_seq_length)
@@ -254,11 +266,16 @@ class VQATrainer(nn.Module):
 		# self.save_results_every = training_args.save_steps
 		self.log_losses_every = training_args.logging_steps
 		self.wandb_every = wandb_every
+		self.evaluate_every = evaluate_every
 
 		self.apply_grad_penalty_every = apply_grad_penalty_every
 
 		hps = {"num_train_steps": self.num_train_steps, "max_seq_length": args.max_seq_length, "learning_rate": training_args.learning_rate}
-		self.accelerator.init_trackers("ofa_vqa", config=hps)        
+		self.accelerator.init_trackers("ofa_vqa", config=hps)   
+
+		if self.is_main:
+			wandb.login()
+			wandb.init(project="ofa_st_cl_bl_co")     
 
 
 	def print(self, msg):
@@ -362,10 +379,9 @@ class VQATrainer(nn.Module):
 
 		self.print(losses_str)
 
-		# if self.is_main and (steps % self.evaluate_every == 0):
-		#	with torch.no_grad():
-			#for batch in self.valid_dl:
-			# 	loss, sample_size, logging_output = self.loss_fnc(self.vqa_model,batch,steps)
+		if self.is_main and (steps % self.evaluate_every == 0):
+			self.validation_step(steps)
+			
 		
 				
 		# save model every so often
@@ -380,6 +396,48 @@ class VQATrainer(nn.Module):
 
 		self.steps += 1
 		return logs
+	
+
+
+	
+
+	def validation_step(self , steps):
+		self.vqa_model.eval()
+		val_loss_ae = {}
+
+		print(f"validation start")
+
+		with torch.no_grad():
+
+			for batch in tqdm((self.valid_dl), position=0, leave=True):
+
+				
+
+				loss, sample_size, logging_output = self.loss_fnc(self.vqa_model,batch, steps)
+				
+				loss_dict = {
+				"loss": loss.item(),
+				"acc":logging_output["acc"],
+				"nll_loss": logging_output["nll_loss"].detach().cpu(),
+				}	
+			   
+				val_loss_ae.update(loss_dict)
+
+				sums_ae = dict(Counter(val_loss_ae) + Counter(loss_dict))
+				means_ae = {k: sums_ae[k] / float((k in val_loss_ae) + (k in loss_dict)) for k in sums_ae}
+				val_loss_ae.update(means_ae)
+
+
+
+		for key , value in val_loss_ae.items():
+			wandb.log({f'val_loss_vqgan/{key}': value})                
+		
+		print("val/loss" ,val_loss_ae["loss"], )
+		print(f"val/acc " ,val_loss_ae["acc"], )
+		print(f"val/nll_loss " ,val_loss_ae["nll_loss"], )
+
+		self.vqa_model.train()
+	
 
 	def train(self, resume = False, log_fn = noop):
 

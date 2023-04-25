@@ -36,6 +36,8 @@ def main(args_base ,args , training_args):
         args = args,
         training_args = training_args,
         wandb_every = args_base.wandb_every,
+        evaluate_every = args_base.evaluate_every,
+        
         data_folder=args_base.data_folder
 
     ).cuda()
@@ -51,14 +53,14 @@ if __name__ == '__main__':
     parser.add_argument('--data_folder', default='/srv/scratch/sanisetty3/DLM/AliceMind/mPLUG/data/json/vqa_ocr_object/', help="folder with train and test data")
     parser.add_argument('--pretrained', default='/srv/scratch/sanisetty3/DLM/OFA-base-vqa')
     parser.add_argument('--resume', default=True, type = bool)
-    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/base_vqa_bowl")
+    parser.add_argument('--output_dir', default="/srv/scratch/sanisetty3/DLM/OFA_VQA/checkpoints/base_vqa_mix")
     parser.add_argument('--evaluate', action='store_true')
     parser.add_argument('--seed', default=42, type=int)
     parser.add_argument('--fp16', default=True, type=bool)
 
-    parser.add_argument('--per_device_train_batch_size', default=36, type=int,)
-    parser.add_argument('--per_device_eval_batch_size', default=36, type=int,)
-    parser.add_argument('--gradient_accumulation_steps', default=8, type=int,)
+    parser.add_argument('--per_device_train_batch_size', default=128, type=int,)
+    parser.add_argument('--per_device_eval_batch_size', default=60, type=int,)
+    parser.add_argument('--gradient_accumulation_steps', default=4, type=int,)
     parser.add_argument('--label_smoothing', default=0.1, type=float,)
 
 
@@ -66,6 +68,8 @@ if __name__ == '__main__':
     parser.add_argument("--save_steps",  default=500,type=int)
     parser.add_argument("--logging_steps",  default=10,type=int)
     parser.add_argument("--wandb_every",  default=50,type=int)
+    parser.add_argument("--evaluate_every",  default=500,type=int)
+
     parser.add_argument("--train_args_file", type=str, default='/srv/scratch/sanisetty3/DLM/OFA_VQA/ctl/train_ofa.json', help="")
     
     parser.add_argument('--freeze_encoder', default=True, type = bool)
