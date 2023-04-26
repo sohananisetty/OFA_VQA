@@ -378,14 +378,7 @@ class VQATrainer(nn.Module):
 				wandb.log({f'train_loss/{key}': value})           
 
 		self.print(losses_str)
-
-		if self.is_main and (steps % self.evaluate_every == 0):
-			self.validation_step(steps)
-			
-		
-				
-		# save model every so often
-		
+  
 		if self.is_main and not (steps % self.save_model_every) and steps>0:
 			os.makedirs(os.path.join(self.results_folder ) , exist_ok=True)
 			model_path = os.path.join(self.results_folder ,  f'ofa_vqa.{steps}.pt')
@@ -393,6 +386,13 @@ class VQATrainer(nn.Module):
 
 			self.print(f'{steps}: saving model to {str(os.path.join(self.results_folder) )}')
 
+
+		if self.is_main and (steps % self.evaluate_every == 0):
+			self.validation_step(steps)
+			
+		
+					
+		
 
 		self.steps += 1
 		return logs

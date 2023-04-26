@@ -69,14 +69,14 @@ class VQACollator():
         # if samples[0].get("decoder_prompt", None) is not None:
         #     prefix_tokens = decoder_prompt_ids[:, 1:]
 
-        # ref_dict = None
+        ref_dict = None
         # print(samples[0].get("ref_dict", "no ref dict"))
-        # if samples[0].get("ref_dict", None) is not None:
-        #     ref_dict = np.array([s['ref_dict'] for s in samples])
+        if samples[0].get("ref_dict", None) is not None:
+            ref_dict = np.array([s['ref_dict'] for s in samples])
 
-        # conf = None
-        # if samples[0].get("conf", None) is not None:
-        #     conf = torch.cat([s['conf'] for s in samples], dim=0)
+        conf = None
+        if samples[0].get("conf", None) is not None:
+            conf = torch.cat([s['conf'] for s in samples], dim=0)
 
 
         batch = {
@@ -86,8 +86,8 @@ class VQACollator():
             "decoder_input_ids": prev_output_tokens,
             "target": target_item,
             "attention_mask" : attention_mask,
-            # "conf": conf,
-            # "ref_dict": ref_dict,
+            "conf": conf,
+            "ref_dict": ref_dict,
 
         }
 
